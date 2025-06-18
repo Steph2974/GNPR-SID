@@ -116,16 +116,16 @@ class VectorQuantizer(nn.Module):
                 mean_soft_count = soft_counts.mean()
                 mean_count_loss = torch.mean((soft_counts - mean_soft_count) ** 2) / (mean_soft_count ** 2 + 1e-5)
                 # pairwise
-                pairwise_loss = 0
-                for i in range(self.n_e):
-                    codebook_vectors = x_q[indices == i]
-                    if len(codebook_vectors) > 1:
-                        pairwise_distances = torch.cdist(codebook_vectors, codebook_vectors, p=2)
-                        pairwise_loss += pairwise_distances.mean()
+                # pairwise_loss = 0
+                # for i in range(self.n_e):
+                #     codebook_vectors = x_q[indices == i]
+                #     if len(codebook_vectors) > 1:
+                #         pairwise_distances = torch.cdist(codebook_vectors, codebook_vectors, p=2)
+                #         pairwise_loss += pairwise_distances.mean()
 
                 diversity_loss = (
-                    0.1 * (pairwise_loss / self.n_e) +
-                    0.1 * mean_count_loss
+                    # 0.1 * (pairwise_loss / self.n_e) +
+                    0.05 * mean_count_loss
                 )
                 loss = codebook_loss + self.beta * commitment_loss + self.diversity_loss * diversity_loss
             else:
