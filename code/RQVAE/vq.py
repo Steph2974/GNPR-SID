@@ -124,7 +124,7 @@ class VectorQuantizer(nn.Module):
                         pairwise_loss += pairwise_distances.mean()
 
                 diversity_loss = (
-                    # 0.1 * (pairwise_loss / self.n_e) +
+                    0.1 * (pairwise_loss / self.n_e) +
                     0.1 * mean_count_loss
                 )
                 loss = codebook_loss + self.beta * commitment_loss + self.diversity_loss * diversity_loss
