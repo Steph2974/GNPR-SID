@@ -1,19 +1,40 @@
-The full codebase is still under organization. Currently, the following components have been made available:
+This repository contains the official implementation of the KDD 2025 paper *“Generative Next POI Recommendation with Semantic ID.”*
 
-- **RQ-VAE Module**  
-  The core implementation of the Residual Vector Quantized Variational Autoencoder (RQ-VAE) is provided.  
-  To train a custom codebook, use the script [`code/train_rqvae.py`](./code/train_rqvae.py).  
-  After training, the mapping from discrete token IDs to semantic IDs can be generated using [`codebook.py`](./codebook.py).
+The following components are already available:
 
-- **Sample Dataset**  
-  A sample dataset based on **NYC** data is included for demonstration and evaluation purposes.
+### **RQ-VAE Module**
 
-- **Data Preprocessing**  
-  The preprocessing pipeline is provided in the following Jupyter notebooks:  
-  - [`dataprocess.ipynb`](./path/to/dataprocess.ipynb): for raw data cleaning and formatting  
-  - [`data2json.ipynb`](./path/to/data2json.ipynb): for converting processed data into model-ready JSON format
+The core implementation of the Residual Vector Quantized Variational Autoencoder (RQ-VAE) is provided.
 
-- **Model Fine-tuning**  
-  We adopt the [LLaMA-Factory](https://github.com/hiyouga/LLaMA-Factory) framework for fine-tuning large language models.  
-  You can reproduce the fine-tuning and evaluation processes by using our dataset along with the official instructions provided in the LLaMA-Factory repository.
+* 使用 `code/train_rqvae.py` to train a custom codebook.
+* After training, use `codebook.py` to generate the mapping from discrete token IDs to semantic IDs.
+
+### **Sample Dataset**
+
+A sample dataset based on the **NYC** check-in data is included for demonstration and evaluation.
+
+### **Data Preprocessing**
+
+The data preprocessing pipeline is available in the following Jupyter notebooks:
+
+* `dataprocess.ipynb`: raw data cleaning and formatting
+* `data2json.ipynb`: conversion of processed data into model-ready JSON format
+
+### **Model Fine-tuning**
+
+Model fine-tuning is conducted using the [LLaMA-Factory](https://github.com/hiyouga/LLaMA-Factory) framework.
+You can reproduce the fine-tuning and evaluation workflows using our processed datasets, following the official instructions provided in the LLaMA-Factory repository.
+
+### **Cite Us**
+
+```bibtex
+@inproceedings{Wang2025GNPRSID,
+  author    = {Dongsheng Wang and Yuxi Huang and Shen Gao and Yifan Wang and Chengrui Huang and Shuo Shang},
+  title     = {Generative Next POI Recommendation with Semantic ID},
+  booktitle = {Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining},
+  year      = {2025},
+  pages     = {2904--2914},
+  doi       = {10.1145/3711896.3736981}
+}
+```
 
