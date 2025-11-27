@@ -6,7 +6,7 @@ The following components are already available:
 
 The core implementation of the Residual Vector Quantized Variational Autoencoder (RQ-VAE) is provided.
 
-* 使用 `code/train_rqvae.py` to train a custom codebook.
+* using `code/train_rqvae.py` to train a custom codebook.
 * After training, use `codebook.py` to generate the mapping from discrete token IDs to semantic IDs.
 
 ### **Sample Dataset**
