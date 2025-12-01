@@ -64,7 +64,7 @@ if __name__ == '__main__':
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
     
-    data_mode = "TKY"
+    data_mode = "NYC"
     args = parse_args(data_mode)
     print("=================================================")
     print(args)
