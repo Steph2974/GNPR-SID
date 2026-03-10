@@ -32,6 +32,7 @@ class RQVAE(nn.Module):
                  use_linear=0,
                  beta=0.25,
                  diversity_loss=0.0,
+                 use_bridge=False,
                  ):
         super(RQVAE, self).__init__()
 
@@ -66,7 +67,8 @@ class RQVAE(nn.Module):
             sk_iters=self.sk_iters,
             use_sk=use_sk,
             use_linear=use_linear,
-            diversity_loss=diversity_loss
+            diversity_loss=diversity_loss,
+            use_bridge=use_bridge,
         )
 
         self.decode_layer_dims = [self.e_dim] + self.layers + [self.in_dim]

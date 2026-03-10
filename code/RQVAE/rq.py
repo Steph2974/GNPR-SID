@@ -18,6 +18,7 @@ class ResidualVectorQuantizer(nn.Module):
             use_sk=False,
             beta=0.25,
             diversity_loss=0.0,
+            use_bridge=False,
     ):
         super().__init__()
         self.n_e_list = n_e_list
@@ -40,6 +41,7 @@ class ResidualVectorQuantizer(nn.Module):
             use_sk=use_sk,
             beta=beta,
             diversity_loss=diversity_loss,
+            use_bridge=use_bridge,
         ) for n_e, sk_epsilon in zip(n_e_list, sk_epsilons)])
 
     def get_codebook(self):

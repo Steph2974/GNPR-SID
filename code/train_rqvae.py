@@ -12,6 +12,19 @@ from trainer import Trainer
 import numpy as np
 import logging
 
+
+def str2bool(v):
+    """把命令行字符串正确解析为 bool，支持 0/1、true/false、yes/no 等。"""
+    if isinstance(v, bool):
+        return v
+    s = str(v).lower()
+    if s in ("1", "true", "t", "yes", "y"):
+        return True
+    if s in ("0", "false", "f", "no", "n"):
+        return False
+    raise argparse.ArgumentTypeError(f"需要布尔值，得到: {v}")
+
+
 def parse_args(data_mode):
 
     parser = argparse.ArgumentParser(description="Index")
@@ -36,8 +49,9 @@ def parse_args(data_mode):
     parser.add_argument('--sk_epsilons', type=float, nargs='+', default=[0.0, 0.0, 0.003], help="sinkhorn epsilons")
     parser.add_argument("--sk_iters", type=int, default=50, help="max sinkhorn iters")
     parser.add_argument("--use-liner", type=int, default=0, help="use-liner")
+    parser.add_argument("--use_bridge", type=str2bool, default=False, help="use bridge or not (0/1, true/false)")
 
-    parser.add_argument("--device", type=str, default="cuda:7", help="gpu or cpu")
+    parser.add_argument("--device", type=str, default="cuda:0", help="gpu or cpu") # cuda:0 is the first GPU
 
     parser.add_argument('--num_emb_list', type=int, nargs='+', default=[32,32,32], help='emb num of every vq')
     parser.add_argument('--e_dim', type=int, default=64, help='vq codebook embedding size')
@@ -49,6 +63,7 @@ def parse_args(data_mode):
 
     parser.add_argument('--save_limit', type=int, default=5)
     parser.add_argument("--ckpt_dir", type=str, default="save", help="output directory for model")
+    parser.add_argument("--version", type=str, default="v1", help="version")
 
     return parser.parse_args()
 
@@ -64,7 +79,7 @@ if __name__ == '__main__':
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
     
-    data_mode = "NYC"
+    data_mode = "NYC" # NYC, TKY, CA
     args = parse_args(data_mode)
     print("=================================================")
     print(args)
@@ -74,22 +89,23 @@ if __name__ == '__main__':
     data = EmbDataset(args.data_path)
     input_dim = data[0][1].shape[0]
     model = RQVAE(
-            in_dim=input_dim, 
-            num_emb_list=args.num_emb_list, 
-            e_dim=args.e_dim,
-            layers=args.layers,
-            dropout_prob=args.dropout_prob,
-            bn=args.bn,
-            loss_type=args.loss_type,
-            quant_loss_weight=args.quant_loss_weight,
-            kmeans_init=args.kmeans_init,
-            kmeans_iters=args.kmeans_iters,
-            sk_epsilons=args.sk_epsilons,
-            sk_iters=args.sk_iters,
-            use_linear=args.use_liner,
-            use_sk=args.use_sk,
-            beta=args.beta,
-            diversity_loss=args.lamda,
+            in_dim=input_dim, # 输入维度，即 POI 特征向量的维度
+            num_emb_list=args.num_emb_list, # 每层 codebook 的大小, 默认 [32,32,32], 表示 3 层 codebook
+            e_dim=args.e_dim, # 输出维度, 默认 64
+            layers=args.layers, # 每层 MLP 的维度, 默认 [512, 256, 128], 表示 3 层 MLP
+            dropout_prob=args.dropout_prob, # dropout 概率
+            bn=args.bn, # 是否使用 batch normalization
+            loss_type=args.loss_type, # 损失类型, mse 或 l1
+            quant_loss_weight=args.quant_loss_weight, # 量化损失的权重
+            kmeans_init=args.kmeans_init, # 是否使用 kmeans 初始化
+            kmeans_iters=args.kmeans_iters, # kmeans 迭代次数
+            sk_epsilons=args.sk_epsilons, # sinkhorn 迭代次数
+            sk_iters=args.sk_iters, # sinkhorn 迭代次数
+            use_linear=args.use_liner, # 是否使用线性量化, 0 或 1
+            use_sk=args.use_sk, # 是否使用 sinkhorn 量化, 0 或 1
+            beta=args.beta, # beta 损失的权重
+            diversity_loss=args.lamda, # 多样性损失的权重
+            use_bridge=args.use_bridge,
     )
     data_loader = DataLoader(data, num_workers=args.num_workers,
                              batch_size=args.batch_size, shuffle=True,
@@ -98,5 +114,5 @@ if __name__ == '__main__':
     trainer = Trainer(args, model, len(data_loader))
     best_loss, best_collision_rate = trainer.fit(data_loader)
 
-    print("Best Loss", best_loss)
-    print("Best Collision Rate", best_collision_rate)
+    logging.info("Best Loss: %f", best_loss)
+    logging.info("Best Collision Rate: %f", best_collision_rate)

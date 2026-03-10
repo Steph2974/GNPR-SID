@@ -36,10 +36,22 @@ class Trainer(object):
         self.device = args.device
         self.device = torch.device(self.device)
         self.ckpt_dir = args.ckpt_dir
-        saved_model_dir = "{}".format(args.lamda)
+        self.version = args.version
+        self.use_bridge = args.use_bridge
+        if self.use_bridge:
+            saved_model_dir = os.path.join("bridge", str(self.version), str(args.lamda))
+        else:
+            saved_model_dir = os.path.join("none-bridge",str(self.version), str(args.lamda))
+        ensure_dir(saved_model_dir)
 
         self.ckpt_dir = os.path.join(f"{self.ckpt_dir}/{data_mode}", saved_model_dir)
         ensure_dir(self.ckpt_dir)
+        
+        # 创建log文件
+        log_file_path = os.path.join(self.ckpt_dir, "log.txt")
+        if not os.path.exists(log_file_path):
+            with open(log_file_path, 'w', encoding='utf-8') as f:
+                pass
 
         self.best_loss = np.inf
         self.best_collision_rate = np.inf
@@ -114,12 +126,12 @@ class Trainer(object):
         for batch_idx, data in enumerate(iter_data):
             pids, data = data[0], data[1]
             data = data.to(self.device)
-            self.optimizer.zero_grad()
-            out, rq_loss, indices = self.model(data,epoch_idx)
-            loss, loss_recon = self.model.compute_loss(out, rq_loss, xs=data)
+            self.optimizer.zero_grad() # 清空梯度
+            out, rq_loss, indices = self.model(data,epoch_idx) # 前向传播
+            loss, loss_recon = self.model.compute_loss(out, rq_loss, xs=data) # 计算损失
             self._check_nan(loss)
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+            loss.backward() # 反向传播
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0) # 梯度裁剪
             self.optimizer.step()
             self.scheduler.step()
             # print(self.scheduler.get_last_lr())
@@ -152,9 +164,12 @@ class Trainer(object):
                 code = "-".join([str(int(_)) for _ in index])
                 indices_set.add(code)
 
-        collision_rate = (num_sample - len(list(indices_set))) / num_sample
+        # 用于计算碰撞率
+        unique_count = len(list(indices_set)) # 唯一性计数
+        collision_count = num_sample - unique_count # 碰撞计数
+        collision_rate = collision_count / num_sample # 碰撞率
 
-        return collision_rate
+        return collision_rate, unique_count, collision_count # 返回碰撞率，唯一性计数，碰撞计数
 
     def _save_checkpoint(self, epoch, collision_rate=1, ckpt_file=None):
 
@@ -205,7 +220,9 @@ class Trainer(object):
             # eval
             if (epoch_idx + 1) % self.eval_step == 0:
                 valid_start_time = time()
-                collision_rate = self._valid_epoch(data)
+
+                # 用于计算碰撞率
+                collision_rate, unique_count, collision_count = self._valid_epoch(data)
 
                 if train_loss < self.best_loss:
                     self.best_loss = train_loss
@@ -226,8 +243,12 @@ class Trainer(object):
                                              + set_color("time", "blue")
                                              + ": %.2fs, "
                                              + set_color("collision_rate", "blue")
-                                             + ": %f]"
-                                     ) % (epoch_idx, valid_end_time - valid_start_time, collision_rate)
+                                             + ": %.4f, " # 碰撞率
+                                             + set_color("unique", "blue")
+                                             + ": %d, " # 唯一性计数
+                                             + set_color("collisions", "blue")
+                                             + ": %d]" # 碰撞计数
+                                     ) % (epoch_idx, valid_end_time - valid_start_time, collision_rate, unique_count, collision_count)
 
                 self.logger.info(valid_score_output)
                 print(valid_score_output)
