@@ -6,7 +6,8 @@ from .layers import kmeans, sinkhorn_algorithm
 import torch
 import torch.nn as nn
 
-class VQBridge(nn.Module):
+
+class VQBridge_v1(nn.Module):
     """
     轻量级 VQBridge 模块：用于缓解向量量化(VQ)中的码本崩溃与冲突问题。
     通过在量化匹配前引入码本的全局信息交互，将原本的“稀疏梯度”转化为“密集梯度”。
@@ -73,6 +74,82 @@ class VQBridge(nn.Module):
         
         return refined_codebook
 
+class VQBridge_v2(nn.Module):
+    def __init__(self, dim, hidden_dim=32, num_heads=4):
+        super().__init__()
+        self.compress = nn.Linear(dim, hidden_dim)
+        
+        self.process = nn.TransformerEncoderLayer(
+            d_model=hidden_dim, 
+            nhead=num_heads, 
+            dim_feedforward=hidden_dim * 2,  
+            batch_first=True,                
+            norm_first=True,                 
+            dropout=0.1
+        )
+        
+        self.recover = nn.Linear(hidden_dim, dim)
+        
+        # 引入一个可学习的缩放因子，让模型自己决定吸收多少交互信息
+        self.alpha = nn.Parameter(torch.zeros(1))
+
+        # 【关键修改 1】：只用常规方式初始化 compress
+        nn.init.xavier_uniform_(self.compress.weight)
+        
+        # 【关键修改 2】：将 recover 层严格初始化为 0。
+        # 这样在初始状态下，Bridge 的输出完全是 0，保证 K-Means 初始化不被破坏
+        nn.init.zeros_(self.recover.weight)
+        nn.init.zeros_(self.recover.bias)
+        
+        # 【关键修改 3】：删除 self.norm
+
+    def forward(self, codebook):
+        x = codebook.unsqueeze(0)
+        x = self.compress(x)
+        x = self.process(x)
+        x = self.recover(x).squeeze(0)
+        
+        # 【关键修改 4】：使用门控残差连接，且去除了 LayerNorm
+        refined_codebook = codebook + self.alpha * x
+        
+        return refined_codebook
+
+class VQBridge(nn.Module):
+    def __init__(self, dim, hidden_dim=32, num_heads=4):
+        super().__init__()
+        self.compress = nn.Linear(dim, hidden_dim)
+        
+        self.process = nn.TransformerEncoder(
+            nn.TransformerEncoderLayer(
+                d_model=hidden_dim, 
+                nhead=num_heads, 
+                dim_feedforward=hidden_dim * 4,  # 加大 FFN
+                batch_first=True,
+                norm_first=True,
+                dropout=0.1
+            ),
+            num_layers=2   # 加到 2 层
+        )
+        
+        self.recover = nn.Linear(hidden_dim, dim)
+
+        nn.init.normal_(self.compress.weight, std=0.02)
+        nn.init.zeros_(self.compress.bias)
+        nn.init.normal_(self.recover.weight, std=1e-4)   # 极小 std
+        nn.init.zeros_(self.recover.bias)
+        self.alpha = nn.Parameter(torch.tensor([0.01]))
+
+        
+
+    def forward(self, codebook):
+        x = codebook.unsqueeze(0)
+        x = self.compress(x)
+        x = self.process(x)
+        x = self.recover(x).squeeze(0)
+        refined_codebook = codebook + self.alpha * x
+        return refined_codebook
+
+        
 class VectorQuantizer(nn.Module):
 
     def __init__(
@@ -169,7 +246,6 @@ class VectorQuantizer(nn.Module):
 
         # 在计算距离与查表前，用 VQBridge 对码本做全局交互（缓解码本崩溃）
         if self.use_bridge:
-            print(f"use_bridge: {self.use_bridge}")
             embeddings_weight = self.vq_bridge(embeddings_weight)
 
         # Calculate the L2 Norm between latent and Embedded weights
@@ -190,24 +266,21 @@ class VectorQuantizer(nn.Module):
         commitment_loss = F.mse_loss(x_q.detach(), x)
         codebook_loss = F.mse_loss(x_q, x.detach())
 
-        if epoch_idx >= 100: # 防止在训练初期就计算 diversity_loss，但是把 1000 改成 100（2025-12-14）    
+        # 计算码字的正交排斥损失 (Orthogonal Loss)
+        # 让所有码字互相推开，降低它们之间的余弦相似度
+        norm_codebook = F.normalize(embeddings_weight, p=2, dim=-1)
+        # 计算码字间的余弦相似度矩阵 [N_e, N_e]
+        sim_matrix = torch.matmul(norm_codebook, norm_codebook.t())
+        # 减去对角线（自己与自己的相似度1），保留非对角线元素的平方和作为惩罚
+        sim_matrix = sim_matrix - torch.eye(self.n_e, device=sim_matrix.device)
+        orthogonal_loss = (sim_matrix ** 2).mean()
+
+        if epoch_idx >= 10: # 防止在训练初期就计算 diversity_loss，但是把 1000 改成 100（2025-12-14）    
             if self.diversity_loss > 0:
                 soft_counts = Q.sum(0)  # [N]
                 mean_soft_count = soft_counts.mean()
                 mean_count_loss = torch.mean((soft_counts - mean_soft_count) ** 2) / (mean_soft_count ** 2 + 1e-5)
-                # pairwise
-                # pairwise_loss = 0
-                # for i in range(self.n_e):
-                #     codebook_vectors = x_q[indices == i]
-                #     if len(codebook_vectors) > 1:
-                #         pairwise_distances = torch.cdist(codebook_vectors, codebook_vectors, p=2)
-                #         pairwise_loss += pairwise_distances.mean()
-                # print(f"mean_count_loss: {mean_count_loss}")
-                diversity_loss = (
-                    # 0.1 * (pairwise_loss / self.n_e) +
-                    0.05 * mean_count_loss
-                )
-                # print(f"diversity_loss: {diversity_loss}")
+                diversity_loss = 0.05 * mean_count_loss + 0.5 * orthogonal_loss
                 loss = codebook_loss + self.beta * commitment_loss + self.diversity_loss * diversity_loss
             else:
                 loss = codebook_loss + self.beta * commitment_loss
