@@ -16,8 +16,8 @@ from utils import set_color
 def parse_args(data_mode):
     parser = argparse.ArgumentParser(description="Index")
 
-    parser.add_argument('--lr', type=float, default=2e-4, help='learning rate')
-    parser.add_argument('--epochs', type=int, default=2000, help='number of epochs')
+    parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
+    parser.add_argument('--epochs', type=int, default=3000, help='number of epochs')
     parser.add_argument('--batch_size', type=int, default=128, help='batch size')
     parser.add_argument('--num_workers', type=int, default=8, )
     parser.add_argument('--eval_step', type=int, default=50, help='eval step')
@@ -26,20 +26,20 @@ def parse_args(data_mode):
     parser.add_argument('--warmup_epochs', type=int, default=50, help='warmup epochs')
     parser.add_argument("--data_path", type=str, default=f"/datasets/{data_mode}/poi_info.csv", help="Input data path.")
 
-    parser.add_argument("--weight_decay", type=float, default=1e-5, help='l2 regularization weight')
+    parser.add_argument("--weight_decay", type=float, default=1e-4, help='l2 regularization weight')
     parser.add_argument("--dropout_prob", type=float, default=0.1, help="dropout ratio")
     parser.add_argument("--bn", type=bool, default=False, help="use bn or not")
     parser.add_argument("--loss_type", type=str, default="mse", help="loss_type") # mse, l1
     parser.add_argument("--kmeans_init", type=bool, default=False, help="use kmeans_init or not")
     parser.add_argument("--kmeans_iters", type=int, default=100, help="max kmeans iters")
     parser.add_argument('--use_sk', type=bool, default=False, help="use sinkhorn or not")
-    parser.add_argument('--sk_epsilons', type=float, nargs='+', default=[0.0, 0.0, 0.0], help="sinkhorn epsilons")
+    parser.add_argument('--sk_epsilons', type=float, nargs='+', default=[0.0, 0.0, 0.003], help="sinkhorn epsilons")
     parser.add_argument("--sk_iters", type=int, default=50, help="max sinkhorn iters")
     parser.add_argument("--use-liner", type=int, default=0, help="use-liner")
 
     parser.add_argument("--device", type=str, default="cuda:7", help="gpu or cpu")
 
-    parser.add_argument('--num_emb_list', type=int, nargs='+', default=[64,64,64], help='emb num of every vq')
+    parser.add_argument('--num_emb_list', type=int, nargs='+', default=[32,32,32], help='emb num of every vq') # NYC 是 32，其他 2 个是 64
     parser.add_argument('--e_dim', type=int, default=64, help='vq codebook embedding size')
     parser.add_argument('--quant_loss_weight', type=float, default=1.0, help='vq quantion loss weight')
     parser.add_argument("--beta", type=float, default=0.25, help="Beta for commitment loss")
@@ -49,6 +49,7 @@ def parse_args(data_mode):
 
     parser.add_argument('--save_limit', type=int, default=5)
     parser.add_argument("--ckpt_dir", type=str, default="save", help="output directory for model")
+    parser.add_argument("--version", type=str, default="v0", help="version")
 
 
     return parser.parse_args()
@@ -64,8 +65,15 @@ if __name__ == '__main__':
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-    data_mode = "TKY"
+    data_mode = "NYC"
     args = parse_args(data_mode)
+    if data_mode == "NYC":
+        args.num_emb_list = [32,32,32]
+    elif data_mode == "TKY" or data_mode == "CA":
+        args.num_emb_list = [64,64,64]
+    else:
+        raise ValueError("Invalid data mode. Choose from 'NYC', 'TKY', or 'CA'.")
+        
     print("=================================================")
     print(args)
     print("=================================================")
@@ -81,10 +89,10 @@ if __name__ == '__main__':
 
     best_loss_ckpt = "best_loss_model.pth"
     best_collision_ckpt = "best_collision_model.pth"
-    time_dir = "0"
+    # time_dir = "0"
     current_dir = os.getcwd()
-    best_loss_ckpt_file = args.ckpt_dir + f"/{data_mode}/{time_dir}/{best_loss_ckpt}"
-    best_collision_ckpt_file = args.ckpt_dir + f"/{data_mode}/{time_dir}/{best_collision_ckpt}"
+    best_loss_ckpt_file = args.ckpt_dir + f"/{data_mode}/none-bridge/{args.version}/{args.lamda}/{best_loss_ckpt}"
+    best_collision_ckpt_file = args.ckpt_dir + f"/{data_mode}/none-bridge/{args.version}/{args.lamda}/{best_collision_ckpt}"
     
     checkpoint = torch.load(best_collision_ckpt_file, map_location=args.device, weights_only=False)
    
@@ -147,7 +155,7 @@ if __name__ == '__main__':
         else:
             updated_dict[key] = value 
 
-    csv_file = current_dir+f"/datasets/{data_mode}/codebooks_{time_dir}.csv"
+    csv_file = current_dir+f"/datasets/{data_mode}/codebooks_{args.version}_{args.lamda}.csv"
 
 
     os.makedirs(os.path.dirname(csv_file), exist_ok=True)

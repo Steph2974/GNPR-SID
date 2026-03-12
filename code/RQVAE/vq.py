@@ -266,21 +266,24 @@ class VectorQuantizer(nn.Module):
         commitment_loss = F.mse_loss(x_q.detach(), x)
         codebook_loss = F.mse_loss(x_q, x.detach())
 
-        # 计算码字的正交排斥损失 (Orthogonal Loss)
-        # 让所有码字互相推开，降低它们之间的余弦相似度
-        norm_codebook = F.normalize(embeddings_weight, p=2, dim=-1)
-        # 计算码字间的余弦相似度矩阵 [N_e, N_e]
-        sim_matrix = torch.matmul(norm_codebook, norm_codebook.t())
-        # 减去对角线（自己与自己的相似度1），保留非对角线元素的平方和作为惩罚
-        sim_matrix = sim_matrix - torch.eye(self.n_e, device=sim_matrix.device)
-        orthogonal_loss = (sim_matrix ** 2).mean()
-
-        if epoch_idx >= 10: # 防止在训练初期就计算 diversity_loss，但是把 1000 改成 100（2025-12-14）    
+        if epoch_idx >= 100: # 防止在训练初期就计算 diversity_loss，但是把 1000 改成 100（2025-12-14）    
             if self.diversity_loss > 0:
                 soft_counts = Q.sum(0)  # [N]
                 mean_soft_count = soft_counts.mean()
                 mean_count_loss = torch.mean((soft_counts - mean_soft_count) ** 2) / (mean_soft_count ** 2 + 1e-5)
-                diversity_loss = 0.05 * mean_count_loss + 0.5 * orthogonal_loss
+                # pairwise
+                # pairwise_loss = 0
+                # for i in range(self.n_e):
+                #     codebook_vectors = x_q[indices == i]
+                #     if len(codebook_vectors) > 1:
+                #         pairwise_distances = torch.cdist(codebook_vectors, codebook_vectors, p=2)
+                #         pairwise_loss += pairwise_distances.mean()
+                # print(f"mean_count_loss: {mean_count_loss}")
+                diversity_loss = (
+                    # 0.1 * (pairwise_loss / self.n_e) +
+                    0.05 * mean_count_loss
+                )
+                # print(f"diversity_loss: {diversity_loss}")
                 loss = codebook_loss + self.beta * commitment_loss + self.diversity_loss * diversity_loss
             else:
                 loss = codebook_loss + self.beta * commitment_loss

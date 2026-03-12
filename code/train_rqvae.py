@@ -81,6 +81,12 @@ if __name__ == '__main__':
     
     data_mode = "NYC" # NYC, TKY, CA
     args = parse_args(data_mode)
+    if data_mode == "NYC":
+        args.num_emb_list = [32,32,32]
+    elif data_mode == "TKY" or data_mode == "CA":
+        args.num_emb_list = [64,64,64]
+    else:
+        raise ValueError("Invalid data mode. Choose from 'NYC', 'TKY', or 'CA'.")
     print("=================================================")
     print(args)
     print("=================================================")
@@ -100,7 +106,7 @@ if __name__ == '__main__':
             kmeans_init=args.kmeans_init, # 是否使用 kmeans 初始化
             kmeans_iters=args.kmeans_iters, # kmeans 迭代次数
             sk_epsilons=args.sk_epsilons, # sinkhorn 迭代次数
-            sk_iters=args.sk_iters, # sinkhorn 迭代次数
+            sk_iters=args.sk_iters, # sinkhorn 最大迭代次数
             use_linear=args.use_liner, # 是否使用线性量化, 0 或 1
             use_sk=args.use_sk, # 是否使用 sinkhorn 量化, 0 或 1
             beta=args.beta, # beta 损失的权重
