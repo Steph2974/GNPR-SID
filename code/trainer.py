@@ -39,10 +39,10 @@ class Trainer(object):
         self.ckpt_dir = args.ckpt_dir
         self.version = args.version
         self.use_bridge = args.use_bridge
-        if self.use_bridge:
-            saved_model_dir = os.path.join("bridge", str(self.version), str(args.lamda))
-        else:
-            saved_model_dir = os.path.join("none-bridge",str(self.version), str(args.lamda))
+        # if self.use_bridge:
+        #     saved_model_dir = os.path.join("bridge", str(self.version), str(args.lamda))
+        # else:
+        #     saved_model_dir = os.path.join("none-bridge",str(self.version), str(args.lamda))
         ensure_dir(saved_model_dir)
 
         self.ckpt_dir = os.path.join(f"{self.ckpt_dir}/{data_mode}", saved_model_dir)
