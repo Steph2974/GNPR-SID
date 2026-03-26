@@ -13,29 +13,43 @@ import logging
 from tqdm import tqdm
 from utils import set_color
 
-def parse_args(data_mode):
+
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    s = str(v).lower()
+    if s in ("1", "true", "t", "yes", "y"):
+        return True
+    if s in ("0", "false", "f", "no", "n"):
+        return False
+    raise argparse.ArgumentTypeError(f"需要布尔值，得到: {v}")
+
+
+def parse_args():
     parser = argparse.ArgumentParser(description="Index")
 
     parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
-    parser.add_argument('--epochs', type=int, default=3000, help='number of epochs')
+    parser.add_argument('--epochs', type=int, default=3000, help='number of epochs') # 这个参数好像没用
     parser.add_argument('--batch_size', type=int, default=128, help='batch size')
     parser.add_argument('--num_workers', type=int, default=8, )
     parser.add_argument('--eval_step', type=int, default=50, help='eval step')
     parser.add_argument('--learner', type=str, default="AdamW", help='optimizer')
     parser.add_argument('--lr_scheduler_type', type=str, default="constant", help='scheduler')
     parser.add_argument('--warmup_epochs', type=int, default=50, help='warmup epochs')
-    parser.add_argument("--data_path", type=str, default=f"/datasets/{data_mode}/poi_info.csv", help="Input data path.")
+    parser.add_argument("--data_mode", type=str, default="NYC", help="data mode")
+    parser.add_argument("--data_path", type=str, default=None, help="Input data path; default datasets/{data_mode}/poi_info.csv")
 
     parser.add_argument("--weight_decay", type=float, default=1e-4, help='l2 regularization weight')
     parser.add_argument("--dropout_prob", type=float, default=0.1, help="dropout ratio")
     parser.add_argument("--bn", type=bool, default=False, help="use bn or not")
     parser.add_argument("--loss_type", type=str, default="mse", help="loss_type") # mse, l1
-    parser.add_argument("--kmeans_init", type=bool, default=False, help="use kmeans_init or not")
+    parser.add_argument("--kmeans_init", type=str2bool, default=False, help="use kmeans_init or not (0/1, true/false)")
     parser.add_argument("--kmeans_iters", type=int, default=100, help="max kmeans iters")
     parser.add_argument('--use_sk', type=bool, default=False, help="use sinkhorn or not")
     parser.add_argument('--sk_epsilons', type=float, nargs='+', default=[0.0, 0.0, 0.003], help="sinkhorn epsilons")
     parser.add_argument("--sk_iters", type=int, default=50, help="max sinkhorn iters")
     parser.add_argument("--use-liner", type=int, default=0, help="use-liner")
+    parser.add_argument("--use_bridge", type=int, default=False, help="use bridge or not (0/1, true/false)")
 
     parser.add_argument("--device", type=str, default="cuda:7", help="gpu or cpu")
 
@@ -51,8 +65,10 @@ def parse_args(data_mode):
     parser.add_argument("--ckpt_dir", type=str, default="save", help="output directory for model")
     parser.add_argument("--version", type=str, default="v0", help="version")
 
-
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.data_path is None:
+        args.data_path = os.path.join("datasets", args.data_mode, "poi_info.csv")
+    return args
 
 
 if __name__ == '__main__':
@@ -65,14 +81,14 @@ if __name__ == '__main__':
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-    data_mode = "NYC"
-    args = parse_args(data_mode)
-    if data_mode == "NYC":
+    args = parse_args()
+    data_mode = args.data_mode
+    if data_mode == "NYC" or data_mode == "TKY":
         args.num_emb_list = [32,32,32]
-    elif data_mode == "TKY" or data_mode == "CA":
+    elif data_mode == "CA":
         args.num_emb_list = [64,64,64]
     else:
-        raise ValueError("Invalid data mode. Choose from 'NYC', 'TKY', or 'CA'.")
+        raise ValueError("Invalid data mode. Choose from 'NYC', 'TKY', or 'CA'.")   
         
     print("=================================================")
     print(args)
@@ -91,8 +107,8 @@ if __name__ == '__main__':
     best_collision_ckpt = "best_collision_model.pth"
     # time_dir = "0"
     current_dir = os.getcwd()
-    best_loss_ckpt_file = args.ckpt_dir + f"/{data_mode}/none-bridge/{args.version}/{args.lamda}/{best_loss_ckpt}"
-    best_collision_ckpt_file = args.ckpt_dir + f"/{data_mode}/none-bridge/{args.version}/{args.lamda}/{best_collision_ckpt}"
+    best_loss_ckpt_file = args.ckpt_dir + f"/{data_mode}/{args.version}/{args.lamda}/{best_loss_ckpt}"
+    best_collision_ckpt_file = args.ckpt_dir + f"/{data_mode}/{args.version}/{args.lamda}/{best_collision_ckpt}"
     
     checkpoint = torch.load(best_collision_ckpt_file, map_location=args.device, weights_only=False)
    

@@ -11,6 +11,9 @@ import argparse
 from trainer import Trainer
 import numpy as np
 import logging
+import sys
+import atexit
+from utils import setup_logging
 
 
 def str2bool(v):
@@ -25,7 +28,7 @@ def str2bool(v):
     raise argparse.ArgumentTypeError(f"需要布尔值，得到: {v}")
 
 
-def parse_args(data_mode):
+def parse_args():
 
     parser = argparse.ArgumentParser(description="Index")
 
@@ -37,13 +40,14 @@ def parse_args(data_mode):
     parser.add_argument('--learner', type=str, default="AdamW", help='optimizer')
     parser.add_argument('--lr_scheduler_type', type=str, default="constant", help='scheduler')
     parser.add_argument('--warmup_epochs', type=int, default=50, help='warmup epochs')
-    parser.add_argument("--data_path", type=str, default=f"/datasets/{data_mode}/poi_info.csv", help="Input data path.")
+    parser.add_argument("--data_mode", type=str, default="NYC", help="data mode")
+    parser.add_argument("--data_path", type=str, default=None, help="Input data path; default datasets/{data_mode}/poi_info.csv")
 
     parser.add_argument("--weight_decay", type=float, default=1e-4, help='l2 regularization weight')
     parser.add_argument("--dropout_prob", type=float, default=0.1, help="dropout ratio")
     parser.add_argument("--bn", type=bool, default=False, help="use bn or not")
     parser.add_argument("--loss_type", type=str, default="mse", help="loss_type") # mse, l1
-    parser.add_argument("--kmeans_init", type=bool, default=False, help="use kmeans_init or not")
+    parser.add_argument("--kmeans_init", type=str2bool, default=False, help="use kmeans_init or not (0/1, true/false)")
     parser.add_argument("--kmeans_iters", type=int, default=100, help="max kmeans iters")
     parser.add_argument('--use_sk', type=bool, default=False, help="use sinkhorn or not")
     parser.add_argument('--sk_epsilons', type=float, nargs='+', default=[0.0, 0.0, 0.003], help="sinkhorn epsilons")
@@ -65,7 +69,10 @@ def parse_args(data_mode):
     parser.add_argument("--ckpt_dir", type=str, default="save", help="output directory for model")
     parser.add_argument("--version", type=str, default="v1", help="version")
 
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.data_path is None:
+        args.data_path = os.path.join("datasets", args.data_mode, "poi_info.csv")
+    return args
 
 
 
@@ -79,18 +86,19 @@ if __name__ == '__main__':
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
     
-    data_mode = "NYC" # NYC, TKY, CA
-    args = parse_args(data_mode)
-    if data_mode == "NYC":
+    args = parse_args()
+    data_mode = args.data_mode
+    if data_mode == "NYC" or data_mode == "TKY":
         args.num_emb_list = [32,32,32]
-    elif data_mode == "TKY" or data_mode == "CA":
+    elif data_mode == "CA":
         args.num_emb_list = [64,64,64]
     else:
-        raise ValueError("Invalid data mode. Choose from 'NYC', 'TKY', or 'CA'.")
+        raise ValueError("Invalid data mode. Choose from 'NYC', 'TKY', or 'CA'.")   
+    log_file = setup_logging(args, data_mode)
     print("=================================================")
     print(args)
     print("=================================================")
-    logging.basicConfig(level=logging.DEBUG)
+    logging.info("Log file: %s", log_file)
     """build dataset"""
     data = EmbDataset(args.data_path)
     input_dim = data[0][1].shape[0]

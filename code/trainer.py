@@ -3,6 +3,7 @@ from typing import Any
 import numpy as np
 import torch
 from time import time
+import sys
 from torch import optim
 from tqdm import tqdm
 from transformers import get_linear_schedule_with_warmup, get_constant_schedule_with_warmup
@@ -15,7 +16,13 @@ class Trainer(object):
 
     def __init__(self, args, model, data_num):
         
-        data_mode = args.data_path.split('/')[2]
+        data_mode = getattr(args, "data_mode", None)
+        if not data_mode:
+            parts = [p for p in args.data_path.replace("\\", "/").split("/") if p]
+            try:
+                data_mode = parts[parts.index("datasets") + 1]
+            except (ValueError, IndexError):
+                data_mode = parts[-2] if len(parts) >= 2 else "NYC"
         
         self.args = args
         self.model = model
@@ -43,9 +50,8 @@ class Trainer(object):
         #     saved_model_dir = os.path.join("bridge", str(self.version), str(args.lamda))
         # else:
         #     saved_model_dir = os.path.join("none-bridge",str(self.version), str(args.lamda))
-        ensure_dir(saved_model_dir)
-
-        self.ckpt_dir = os.path.join(f"{self.ckpt_dir}/{data_mode}", saved_model_dir)
+        # ensure_dir(saved_model_dir)
+        self.ckpt_dir = os.path.join(f"{self.ckpt_dir}/{data_mode}/{self.version}/{args.lamda}")
         ensure_dir(self.ckpt_dir)
         
         # 创建log文件
@@ -122,6 +128,7 @@ class Trainer(object):
             total=len(train_data),
             ncols=100,
             desc=set_color(f"Train {epoch_idx}", "pink"),
+            file=sys.__stdout__,
         )
 
         for batch_idx, data in enumerate(iter_data):
@@ -151,6 +158,7 @@ class Trainer(object):
             total=len(valid_data),
             ncols=100,
             desc=set_color(f"Evaluate   ", "pink"),
+            file=sys.__stdout__,
         )
 
         indices_set = set()
@@ -186,23 +194,17 @@ class Trainer(object):
         }
         torch.save(state, ckpt_path, pickle_protocol=4)
 
-        self.logger.info(
-            set_color("Saving current", "blue") + f": {ckpt_path}"
-        )
+        self.logger.info("Saved checkpoint: %s", ckpt_path)
 
         return ckpt_path
 
     def _generate_train_loss_output(self, epoch_idx, s_time, e_time, loss, recon_loss):
-        train_loss_output = (
-                                    set_color("epoch %d training", "green")
-                                    + " ["
-                                    + set_color("time", "blue")
-                                    + ": %.2fs, "
-                            ) % (epoch_idx, e_time - s_time)
-        train_loss_output += set_color("train loss", "blue") + ": %.4f" % loss
-        train_loss_output += ", "
-        train_loss_output += set_color("reconstruction loss", "blue") + ": %.4f" % recon_loss
-        return train_loss_output + "]"
+        return (
+            f"epoch {epoch_idx} training "
+            f"[time: {e_time - s_time:.2f}s, "
+            f"train loss: {loss:.4f}, "
+            f"reconstruction loss: {recon_loss:.4f}]"
+        )
 
     def fit(self, data):
 
@@ -239,17 +241,12 @@ class Trainer(object):
 
                 valid_end_time = time()
                 valid_score_output = (
-                                             set_color("epoch %d evaluating", "green")
-                                             + " ["
-                                             + set_color("time", "blue")
-                                             + ": %.2fs, "
-                                             + set_color("collision_rate", "blue")
-                                             + ": %.4f, " # 碰撞率
-                                             + set_color("unique", "blue")
-                                             + ": %d, " # 唯一性计数
-                                             + set_color("collisions", "blue")
-                                             + ": %d]" # 碰撞计数
-                                     ) % (epoch_idx, valid_end_time - valid_start_time, collision_rate, unique_count, collision_count)
+                    f"epoch {epoch_idx} evaluating "
+                    f"[time: {valid_end_time - valid_start_time:.2f}s, "
+                    f"collision_rate: {collision_rate:.4f}, "
+                    f"unique: {unique_count}, "
+                    f"collisions: {collision_count}]"
+                )
 
                 self.logger.info(valid_score_output)
                 print(valid_score_output)
