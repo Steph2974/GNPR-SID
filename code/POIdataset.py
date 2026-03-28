@@ -22,7 +22,7 @@ class EmbDataset(Dataset):
         time_num = 24
         if mode == 'NYC':
             cat_num = 210
-            region_num = 1
+            region_num = 1 # 92，应该是0-91，所以是92
             neighbor_num = 1084
         elif mode == 'TKY':
             cat_num = 191
