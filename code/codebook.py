@@ -64,6 +64,30 @@ def parse_args():
     parser.add_argument('--save_limit', type=int, default=5)
     parser.add_argument("--ckpt_dir", type=str, default="save", help="output directory for model")
     parser.add_argument("--version", type=str, default="v0", help="version")
+    parser.add_argument(
+        "--use_geo_emb",
+        type=str2bool,
+        default=False,
+        help="Must match training: concatenate geo_emb from CSV (0/1)",
+    )
+    parser.add_argument(
+        "--geo_emb_col",
+        type=str,
+        default="geo_emb",
+        help="Column name for geo embedding (must match training)",
+    )
+    parser.add_argument(
+        "--use_catname",
+        type=str2bool,
+        default=True,
+        help="Override when checkpoint has no field; else taken from checkpoint",
+    )
+    parser.add_argument(
+        "--use_region",
+        type=str2bool,
+        default=True,
+        help="Override when checkpoint has no field; else taken from checkpoint",
+    )
 
     args = parser.parse_args()
     if args.data_path is None:
@@ -81,38 +105,59 @@ if __name__ == '__main__':
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-    args = parse_args()
-    data_mode = args.data_mode
+    cli = parse_args()
+    data_mode = cli.data_mode
     if data_mode == "NYC" or data_mode == "TKY":
-        args.num_emb_list = [32,32,32]
+        cli.num_emb_list = [32, 32, 32]
     elif data_mode == "CA":
-        args.num_emb_list = [64,64,64]
+        cli.num_emb_list = [64, 64, 64]
     else:
-        raise ValueError("Invalid data mode. Choose from 'NYC', 'TKY', or 'CA'.")   
-        
+        raise ValueError("Invalid data mode. Choose from 'NYC', 'TKY', or 'CA'.")
+
+    best_collision_ckpt = "best_collision_model.pth"
+    current_dir = os.getcwd()
+    best_collision_ckpt_file = (
+        cli.ckpt_dir + f"/{data_mode}/{cli.version}/{cli.lamda}/{best_collision_ckpt}"
+    )
+
+    checkpoint = torch.load(
+        best_collision_ckpt_file, map_location=cli.device, weights_only=False
+    )
+
+    args = checkpoint["args"]
+    use_geo_emb = getattr(args, "use_geo_emb", cli.use_geo_emb)
+    geo_emb_col = getattr(args, "geo_emb_col", cli.geo_emb_col)
+    use_catname = getattr(args, "use_catname", cli.use_catname)
+    use_region = getattr(args, "use_region", cli.use_region)
+    data_path = cli.data_path
+
     print("=================================================")
-    print(args)
+    print("CLI:", cli)
+    print(
+        "Checkpoint use_geo_emb=%s use_catname=%s use_region=%s geo_emb_col=%s data_path=%s"
+        % (use_geo_emb, use_catname, use_region, geo_emb_col, data_path)
+    )
     print("=================================================")
 
     logging.basicConfig(level=logging.DEBUG)
 
-    """build dataset"""
-    data = EmbDataset(args.data_path)
+    data = EmbDataset(
+        data_path,
+        use_geo_emb=use_geo_emb,
+        geo_emb_col=geo_emb_col,
+        use_catname=use_catname,
+        use_region=use_region,
+    )
     input_dim = data[0][1].shape[0]
-    data_loader = DataLoader(data, num_workers=args.num_workers,
-                             batch_size=args.batch_size, shuffle=False,
-                             pin_memory=True)
+    data_loader = DataLoader(
+        data,
+        num_workers=cli.num_workers,
+        batch_size=cli.batch_size,
+        shuffle=False,
+        pin_memory=True,
+    )
 
-    best_loss_ckpt = "best_loss_model.pth"
-    best_collision_ckpt = "best_collision_model.pth"
-    # time_dir = "0"
-    current_dir = os.getcwd()
-    best_loss_ckpt_file = args.ckpt_dir + f"/{data_mode}/{args.version}/{args.lamda}/{best_loss_ckpt}"
-    best_collision_ckpt_file = args.ckpt_dir + f"/{data_mode}/{args.version}/{args.lamda}/{best_collision_ckpt}"
-    
-    checkpoint = torch.load(best_collision_ckpt_file, map_location=args.device, weights_only=False)
-   
-    args = checkpoint["args"]
+    args.device = cli.device
     model = RQVAE(
             in_dim=input_dim, 
             num_emb_list=args.num_emb_list, 

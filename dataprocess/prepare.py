@@ -16,23 +16,19 @@ def prepare_and_filter_raw_dataset(
     *,
     raw_csv: Path,
     out_filtered_csv: Path,
-    compute_region: bool = True,
 ) -> Path:
     """
-    Read ``raw_csv``, add Region/Local Time, rename columns,
+    Read ``raw_csv``, add Region (Plus Code) / Local Time, rename columns,
     filter by frequency, and write ``out_filtered_csv``.
 
     Returns the output path.
     """
     df = read_raw_dataset_csv(raw_csv)
 
-    if compute_region:
-        # optional dependency, so import lazily
-        from .geo import pluscode6
+    # optional dependency, so import lazily
+    from .geo import pluscode6
 
-        df["Region"] = df.apply(lambda row: pluscode6(row["Latitude"], row["Longitude"]), axis=1)
-    else:
-        df["Region"] = "0"
+    df["Region"] = df.apply(lambda row: pluscode6(row["Latitude"], row["Longitude"]), axis=1)
     df["UTC Time"] = pd.to_datetime(df["UTC Time"], format="%a %b %d %H:%M:%S %z %Y")
     df["Local Time"] = (df["UTC Time"] + df["Timezone Offset"].apply(lambda x: timedelta(minutes=x))).dt.strftime(
         "%Y-%m-%d %H:%M"

@@ -30,7 +30,6 @@ def map_ids(
     out_dir: str | Path,
     *,
     seed: int | None = 0,
-    force_region_zero: bool = False,
 ) -> tuple[pd.DataFrame, Mappings]:
     """
     Read filtered `{dataset}.csv`, shuffle-and-map Uid/Pid/Catname/Region to integers,
@@ -42,10 +41,7 @@ def map_ids(
     pid_map = _make_mapping(list(df["Pid"].unique()), seed=seed + 1 if seed is not None else None)
     cat_map = _make_mapping(list(df["Catname"].unique()), seed=seed + 2 if seed is not None else None)
 
-    if force_region_zero:
-        reg_map = {reg: 0 for reg in df["Region"].unique()}
-    else:
-        reg_map = _make_mapping(list(df["Region"].unique()), seed=seed + 3 if seed is not None else None)
+    reg_map = _make_mapping(list(df["Region"].unique()), seed=seed + 3 if seed is not None else None)
 
     df["Uid"] = df["Uid"].map(uid_map)
     df["Pid"] = df["Pid"].map(pid_map)

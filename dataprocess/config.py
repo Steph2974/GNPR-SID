@@ -21,7 +21,3 @@ class DatasetConfig:
     step_size: int = 10
     mask_prob: float = 0.1
 
-    # compatibility with `code/POIdataset.py`:
-    # it sets `region_num=1` for NYC, so region values must be 0.
-    force_region_zero_for_nyc: bool = True
-

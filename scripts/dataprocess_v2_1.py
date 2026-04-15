@@ -22,16 +22,13 @@ def run(cfg: DatasetConfig) -> None:
     dataset = cfg.dataset
     layout = DataLayout.resolve(cfg.data_root, cfg.output_root)
 
-    force_region_zero = cfg.force_region_zero_for_nyc and dataset.upper() == "NYC"
-
-    # 1) raw -> filtered
+    # 1) raw -> filtered (Region = Plus Code prefix)
     filtered_csv = prepare_and_filter_raw_dataset(
         dataset,
         cfg.poi_min_freq,
         cfg.user_min_freq,
         raw_csv=layout.raw_csv(dataset),
         out_filtered_csv=layout.filtered_csv(dataset),
-        compute_region=not force_region_zero,
     )
 
     # 2) map ids -> {output_root}/{dataset}/data.csv (+ mapping csvs)
@@ -40,7 +37,6 @@ def run(cfg: DatasetConfig) -> None:
         input_csv=filtered_csv,
         out_dir=layout.dataset_dir(dataset),
         seed=0,
-        force_region_zero=force_region_zero,
     )
 
     data_csv = layout.data_csv(dataset)
@@ -94,19 +90,11 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--window_size", type=int, default=50)
     p.add_argument("--step_size", type=int, default=10)
     p.add_argument("--mask_prob", type=float, default=0.1)
-    p.add_argument("--force_region_zero_for_nyc", action="store_true", help="Force Region=0 for NYC (compat with POIdataset).")
-    p.add_argument("--no_force_region_zero_for_nyc", action="store_true", help="Disable forcing Region=0 for NYC.")
     return p
 
 
 def main() -> None:
     args = build_argparser().parse_args()
-
-    force_region_zero_for_nyc = True
-    if args.force_region_zero_for_nyc:
-        force_region_zero_for_nyc = True
-    if args.no_force_region_zero_for_nyc:
-        force_region_zero_for_nyc = False
 
     cfg = DatasetConfig(
         dataset=args.dataset,
@@ -117,7 +105,6 @@ def main() -> None:
         window_size=args.window_size,
         step_size=args.step_size,
         mask_prob=args.mask_prob,
-        force_region_zero_for_nyc=force_region_zero_for_nyc,
     )
     run(cfg)
 
@@ -125,6 +112,5 @@ def main() -> None:
 if __name__ == "__main__":
     main()
 
-    # python scripts/dataprocess_v2_1.py --dataset NYC --output-root ./datasets/NYC_geo
-    # python scripts/dataprocess_v2_1.py --dataset NYC --output-root datasets/NYC_geo --force_region_zero_for_nyc
+    # python scripts/dataprocess_v2_1.py --dataset NYC --output-root ./datasets
 

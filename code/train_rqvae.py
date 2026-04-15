@@ -68,6 +68,30 @@ def parse_args():
     parser.add_argument('--save_limit', type=int, default=5)
     parser.add_argument("--ckpt_dir", type=str, default="save", help="output directory for model")
     parser.add_argument("--version", type=str, default="v1", help="version")
+    parser.add_argument(
+        "--use_geo_emb",
+        type=str2bool,
+        default=False,
+        help="Concatenate geo_emb column to POI features (0/1); CSV must contain geo_emb from get_geo_emb.py",
+    )
+    parser.add_argument(
+        "--geo_emb_col",
+        type=str,
+        default="geo_emb",
+        help="Column name for geo embedding vectors in poi_info.csv",
+    )
+    parser.add_argument(
+        "--use_catname",
+        type=str2bool,
+        default=True,
+        help="Include Catname one-hot in POI vector (0/1); must match codebook export",
+    )
+    parser.add_argument(
+        "--use_region",
+        type=str2bool,
+        default=True,
+        help="Include Region one-hot in POI vector (0/1); must match codebook export",
+    )
 
     args = parser.parse_args()
     if args.data_path is None:
@@ -100,7 +124,13 @@ if __name__ == '__main__':
     print("=================================================")
     logging.info("Log file: %s", log_file)
     """build dataset"""
-    data = EmbDataset(args.data_path)
+    data = EmbDataset(
+        args.data_path,
+        use_geo_emb=args.use_geo_emb,
+        geo_emb_col=args.geo_emb_col,
+        use_catname=args.use_catname,
+        use_region=args.use_region,
+    )
     input_dim = data[0][1].shape[0]
     model = RQVAE(
             in_dim=input_dim, # 输入维度，即 POI 特征向量的维度

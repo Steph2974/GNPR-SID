@@ -1,9 +1,11 @@
+import argparse
 import math
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import SentenceTransformer  # pyright: ignore[reportMissingImports]
 
 
 def build_geo_emb_for_poi_info(
@@ -154,18 +156,35 @@ def build_geo_emb_for_poi_info(
 
     return poi_info_out, anchors
 
+def _build_argparser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(description="为 poi_info.csv 生成 base_emb / geo_emb 并写回同一路径。")
+    p.add_argument("--dataset", type=str, default="NYC", help="数据集名，与 dataprocess_v2_1 的 --dataset 一致")
+    p.add_argument(
+        "--output-root",
+        type=str,
+        default="datasets",
+        help="与 dataprocess_v2_1 的 --output-root 一致，poi_info 位于 {output_root}/{dataset}/poi_info.csv",
+    )
+    p.add_argument("--model-path", type=str, default="./models/all-MiniLM-L6-v2")
+    p.add_argument("--num-anchors", type=int, default=8)
+    return p
+
+
 if __name__ == "__main__":
-    dataset = "NYC"
+    args = _build_argparser().parse_args()
+    out_dir = Path(args.output_root) / args.dataset
+    poi_path = out_dir / "poi_info.csv"
 
-    poi_info = pd.read_csv(f"datasets//NYC_geo/{dataset}/poi_info.csv")
+    poi_info = pd.read_csv(poi_path)
 
-    poi_info, anchors = build_geo_emb_for_poi_info(
+    poi_info, _anchors = build_geo_emb_for_poi_info(
         poi_info=poi_info,
         text_col="Original_Catname",
         lat_col="Lat",
         lon_col="Lon",
-        model_path="./models/all-MiniLM-L6-v2",
-        num_anchors=8,   # 先用 8，数据不大时更稳；想更贴近论文可以试 16
+        model_path=args.model_path,
+        num_anchors=args.num_anchors,
     )
 
-    poi_info.to_csv(f"datasets/NYC_geo/{dataset}/poi_info.csv", index=False)
+    poi_info.to_csv(poi_path, index=False)
+    print(f"已更新: {poi_path.resolve()}")

@@ -6,8 +6,7 @@ def pluscode6(latitude: float, longitude: float) -> str:
         from openlocationcode import openlocationcode as olc
     except ModuleNotFoundError as e:
         raise ModuleNotFoundError(
-            "Missing dependency `openlocationcode`. Install it with `pip install openlocationcode`, "
-            "or run with `--force_region_zero_for_nyc` for NYC to skip region computation."
+            "Missing dependency `openlocationcode`. Install it with `pip install openlocationcode`."
         ) from e
 
     return olc.encode(latitude, longitude)[:6]

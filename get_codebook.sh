@@ -15,6 +15,10 @@ DEVICE="cuda:3"
 EPOCHS=300
 EVAL_STEP=5
 BATCH_SIZE=128
+USE_GEO_EMB="0"
+USE_CATNAME="1"
+USE_REGION="1"
+DATA_PATH_CLI=""
 # ------------------------------
 
 # ./get_codebook.sh --device cuda:0 --lambda 0.0
@@ -35,6 +39,10 @@ usage() {
   echo "  --epochs      <int>    训练轮数          (默认: $EPOCHS)"
   echo "  --eval_step   <int>    评估间隔          (默认: $EVAL_STEP)"
   echo "  --batch_size  <int>    batch 大小        (默认: $BATCH_SIZE)"
+  echo "  --use_geo_emb <0|1>    是否拼接 geo_emb (默认: $USE_GEO_EMB；需 poi_info 含 geo_emb 列)"
+  echo "  --data_path   <path>   poi_info.csv 路径 (默认: datasets/{data_mode}/poi_info.csv)"
+  echo "  --use_catname <0|1>    是否使用 Catname one-hot (默认: $USE_CATNAME)"
+  echo "  --use_region  <0|1>    是否使用 Region one-hot (默认: $USE_REGION)"
   echo "  -h, --help             显示此帮助"
   exit 0
 }
@@ -49,13 +57,21 @@ while [[ $# -gt 0 ]]; do
     --epochs)      EPOCHS="$2";      shift 2 ;;
     --eval_step)   EVAL_STEP="$2";   shift 2 ;;
     --batch_size)  BATCH_SIZE="$2";  shift 2 ;;
+    --use_geo_emb) USE_GEO_EMB="$2"; shift 2 ;;
+    --data_path)   DATA_PATH_CLI="$2"; shift 2 ;;
+    --use_catname) USE_CATNAME="$2"; shift 2 ;;
+    --use_region)  USE_REGION="$2";  shift 2 ;;
     -h|--help)     usage ;;
     *) echo "未知参数: $1" >&2; usage ;;
   esac
 done
 # -----------------------------------------------
 
-DATA_PATH="/datasets/${DATA_MODE}/poi_info.csv"
+if [[ -n "$DATA_PATH_CLI" ]]; then
+  DATA_PATH="$DATA_PATH_CLI"
+else
+  DATA_PATH="datasets/${DATA_MODE}/poi_info.csv"
+fi
 
 COMMON_ARGS=(
   --data_mode "$DATA_MODE"
@@ -67,10 +83,13 @@ COMMON_ARGS=(
   --kmeans_init "$KMEANS_INIT"
   --version "$VERSION"
   --device "$DEVICE"
+  --use_geo_emb "$USE_GEO_EMB"
+  --use_catname "$USE_CATNAME"
+  --use_region "$USE_REGION"
 )
 
 echo "项目目录: $ROOT"
-echo "配置: data_mode=$DATA_MODE | version=$VERSION | lambda=$LAMBDA | device=$DEVICE | epochs=$EPOCHS"
+echo "配置: data_mode=$DATA_MODE | data_path=$DATA_PATH | version=$VERSION | lambda=$LAMBDA | device=$DEVICE | epochs=$EPOCHS | use_geo_emb=$USE_GEO_EMB | use_catname=$USE_CATNAME | use_region=$USE_REGION"
 echo ""
 
 # 0. 激活 conda 环境
@@ -80,6 +99,8 @@ echo ""
 # 1. 训练 RQ-VAE
 echo "开始训练 RQ-VAE ..."
 "$PYTHON" code/train_rqvae.py "${COMMON_ARGS[@]}"
+
+# sleep 10 # 训练结束后再导出 codebook，可按需改秒数
 
 # 2. 导出 codebook CSV
 echo "导出 codebook CSV ..."

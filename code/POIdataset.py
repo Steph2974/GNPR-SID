@@ -1,3 +1,5 @@
+import ast
+import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
@@ -8,9 +10,30 @@ current_dir = os.getcwd()
 
 # Pid,Uid,Catname,Region,Time,neighbors,forward_neighbors
 
+def _parse_geo_emb_cell(x):
+    """Parse geo_emb from CSV cell (list, ndarray, or string from to_csv)."""
+    if x is None or (isinstance(x, float) and np.isnan(x)):
+        return None
+    if isinstance(x, str):
+        s = x.strip()
+        if not s or s.lower() == "nan":
+            return None
+        return np.asarray(ast.literal_eval(s), dtype=np.float32)
+    if isinstance(x, (list, tuple)):
+        return np.asarray(x, dtype=np.float32)
+    return np.asarray(x, dtype=np.float32)
+
+
 class EmbDataset(Dataset):
 
-    def __init__(self, datapath):
+    def __init__(
+        self,
+        datapath,
+        use_geo_emb=False,
+        geo_emb_col="geo_emb",
+        use_catname=True,
+        use_region=True,
+    ):
         data = pd.read_csv(current_dir + datapath)
         self.ids = data['Pid']
         data['Uid'] = data['Uid'].apply(eval)
@@ -18,11 +41,14 @@ class EmbDataset(Dataset):
         data['neighbors'] = data['neighbors'].apply(eval)
         data['forward_neighbors'] = data['forward_neighbors'].apply(eval)
 
-        mode = datapath.split('/')[2]
+        path_parts = [p for p in datapath.replace("\\", "/").split("/") if p]
+        if len(path_parts) < 2:
+            raise ValueError(f"Cannot infer dataset (NYC/TKY/CA) from datapath: {datapath!r}")
+        mode = path_parts[-2]
         time_num = 24
         if mode == 'NYC':
             cat_num = 210
-            region_num = 1 # 92，应该是0-91，所以是92
+            region_num = 92
             neighbor_num = 1084
         elif mode == 'TKY':
             cat_num = 191
@@ -42,17 +68,26 @@ class EmbDataset(Dataset):
             one_hot *= scale_factor
             return one_hot
         
-        catgories =[]
-        for cat in data[f'Catname']:  
-            cat = to_one_hot_fixed_dim(cat, cat_num, scale_factor=1) 
-            catgories.append(cat)
-        self.catgorie = catgories
+        self.use_catname = use_catname
+        self.use_region = use_region
 
-        regions =[]
-        for region in data[f'Region']:  
-            region = to_one_hot_fixed_dim(region, region_num, scale_factor=1) 
-            regions.append(region)
-        self.regions = regions
+        if use_catname:
+            catgories = []
+            for cat in data["Catname"]:
+                cat = to_one_hot_fixed_dim(cat, cat_num, scale_factor=1)
+                catgories.append(cat)
+            self.catgorie = catgories
+        else:
+            self.catgorie = None
+
+        if use_region:
+            regions = []
+            for region in data["Region"]:
+                region = to_one_hot_fixed_dim(region, region_num, scale_factor=1)
+                regions.append(region)
+            self.regions = regions
+        else:
+            self.regions = None
 
         times =[]
         for time in data[f'Time']:  
@@ -70,10 +105,39 @@ class EmbDataset(Dataset):
             neighbors.append(neighbor)
         self.neighbors = neighbors
 
+        self.use_geo_emb = use_geo_emb
+        self.geo_embs = None
+        if use_geo_emb:
+            if geo_emb_col not in data.columns:
+                raise ValueError(
+                    f"use_geo_emb=True but column {geo_emb_col!r} not in CSV. "
+                    "Run scripts/get_geo_emb.py on poi_info.csv first."
+                )
+            parsed = [_parse_geo_emb_cell(v) for v in data[geo_emb_col]]
+            dims = [p.shape[0] for p in parsed if p is not None]
+            if not dims:
+                raise ValueError(f"No valid vectors in column {geo_emb_col!r}.")
+            geo_dim = dims[0]
+            if any(d != geo_dim for d in dims):
+                raise ValueError(f"Inconsistent {geo_emb_col} lengths in CSV.")
+            self.geo_embs = []
+            for p in parsed:
+                if p is None:
+                    self.geo_embs.append(torch.zeros(geo_dim, dtype=torch.float32))
+                else:
+                    self.geo_embs.append(torch.from_numpy(p.copy()))
 
     def __len__(self):
         return len(self.ids)
 
     def __getitem__(self, idx):
-        return self.ids[idx], torch.cat([self.catgorie[idx], self.regions[idx], self.times[idx], self.neighbors[idx]])
+        parts = []
+        if self.use_catname and self.catgorie is not None:
+            parts.append(self.catgorie[idx])
+        if self.use_region and self.regions is not None:
+            parts.append(self.regions[idx])
+        parts.extend([self.times[idx], self.neighbors[idx]])
+        if self.use_geo_emb and self.geo_embs is not None:
+            parts.append(self.geo_embs[idx])
+        return self.ids[idx], torch.cat(parts)
 
