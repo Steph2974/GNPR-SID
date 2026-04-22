@@ -10,6 +10,7 @@ PYTHON="${PYTHON:-python}"
 DATA_MODE="NYC"
 VERSION="v2.0"
 LAMBDA="0.50"
+SEED=2024
 KMEANS_INIT="0"
 DEVICE="cuda:3"
 EPOCHS=300
@@ -34,6 +35,7 @@ usage() {
   echo "  --data_mode   <str>    数据集名称        (默认: $DATA_MODE)"
   echo "  --version     <str>    版本号            (默认: $VERSION)"
   echo "  --lambda      <float>  lambda 权重       (默认: $LAMBDA)"
+  echo "  --seed        <int>    随机种子          (默认: $SEED)"
   echo "  --kmeans_init <0|1>    是否用 kmeans 初始化 (默认: $KMEANS_INIT)"
   echo "  --device      <str>    训练设备          (默认: $DEVICE)"
   echo "  --epochs      <int>    训练轮数          (默认: $EPOCHS)"
@@ -52,6 +54,7 @@ while [[ $# -gt 0 ]]; do
     --data_mode)   DATA_MODE="$2";   shift 2 ;;
     --version)     VERSION="$2";     shift 2 ;;
     --lambda)      LAMBDA="$2";      shift 2 ;;
+    --seed)        SEED="$2";        shift 2 ;;
     --kmeans_init) KMEANS_INIT="$2"; shift 2 ;;
     --device)      DEVICE="$2";      shift 2 ;;
     --epochs)      EPOCHS="$2";      shift 2 ;;
@@ -80,6 +83,7 @@ COMMON_ARGS=(
   --epochs "$EPOCHS"
   --batch_size "$BATCH_SIZE"
   --lamda "$LAMBDA"
+  --seed "$SEED"
   --kmeans_init "$KMEANS_INIT"
   --version "$VERSION"
   --device "$DEVICE"
@@ -89,7 +93,7 @@ COMMON_ARGS=(
 )
 
 echo "项目目录: $ROOT"
-echo "配置: data_mode=$DATA_MODE | data_path=$DATA_PATH | version=$VERSION | lambda=$LAMBDA | device=$DEVICE | epochs=$EPOCHS | use_geo_emb=$USE_GEO_EMB | use_catname=$USE_CATNAME | use_region=$USE_REGION"
+echo "配置: data_mode=$DATA_MODE | data_path=$DATA_PATH | version=$VERSION | lambda=$LAMBDA | seed=$SEED | device=$DEVICE | epochs=$EPOCHS | use_geo_emb=$USE_GEO_EMB | use_catname=$USE_CATNAME | use_region=$USE_REGION"
 echo ""
 
 # 0. 激活 conda 环境
@@ -98,9 +102,15 @@ echo ""
 
 # 1. 训练 RQ-VAE
 echo "开始训练 RQ-VAE ..."
+set +e
 "$PYTHON" code/train_rqvae.py "${COMMON_ARGS[@]}"
+train_exit_code=$?
+set -e
 
-# sleep 10 # 训练结束后再导出 codebook，可按需改秒数
+if [[ $train_exit_code -ne 0 ]]; then
+  echo "警告: RQ-VAE 训练失败(退出码=$train_exit_code)，继续执行 codebook 导出。"
+fi
+
 
 # 2. 导出 codebook CSV
 echo "导出 codebook CSV ..."

@@ -52,6 +52,7 @@ def parse_args():
     parser.add_argument("--use_bridge", type=int, default=False, help="use bridge or not (0/1, true/false)")
 
     parser.add_argument("--device", type=str, default="cuda:7", help="gpu or cpu")
+    parser.add_argument("--seed", type=int, default=2024, help="random seed")
 
     parser.add_argument('--num_emb_list', type=int, nargs='+', default=[32,32,32], help='emb num of every vq') # NYC 是 32，其他 2 个是 64
     parser.add_argument('--e_dim', type=int, default=64, help='vq codebook embedding size')
@@ -96,8 +97,8 @@ def parse_args():
 
 
 if __name__ == '__main__':
-    """fix the random seed"""
-    seed = 2024
+    cli = parse_args()
+    seed = cli.seed
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -105,7 +106,6 @@ if __name__ == '__main__':
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-    cli = parse_args()
     data_mode = cli.data_mode
     if data_mode == "NYC" or data_mode == "TKY":
         cli.num_emb_list = [32, 32, 32]
